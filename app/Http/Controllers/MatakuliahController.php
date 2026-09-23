@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use App\Http\Controllers\MatakuliahController;
 
 class MatakuliahController extends Controller
 {
@@ -23,7 +22,7 @@ class MatakuliahController extends Controller
         if ($kataKunci !== '') {
             $matakuliah = array_filter($matakuliah, function ($mk) use ($kataKunci) {
                 return stripos($mk['nama'], $kataKunci) !== false ||
-                       stripos($mk['kode'], $kataKunci) !== false;
+                    stripos($mk['kode'], $kataKunci) !== false;
             });
         }
 
