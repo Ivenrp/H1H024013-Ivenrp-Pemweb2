@@ -1,42 +1,94 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreMahasiswaRequest;
+use App\Http\Requests\UpdateMahasiswaRequest;
+use App\Http\Resources\MahasiswaResource;
 use App\Models\Mahasiswa;
 use Illuminate\Http\Request;
 
-class MahasiswaWebController extends Controller
+class MahasiswaController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $daftarMahasiswa = Mahasiswa::with('programStudi')
-            ->orderBy('nama')
-            ->paginate(10);
+        $kueri = Mahasiswa::query()->with('programStudi');
 
-        return view('mahasiswa.index', ['daftarMahasiswa' => $daftarMahasiswa]);
+        if ($request->filled('cari')) {
+            $kataKunci = $request->query('cari');
+            $kueri->where(function ($sub) use ($kataKunci) {
+                $sub->where('nama', 'like', '%' . $kataKunci . '%')
+                    ->orWhere('nim', 'like', '%' . $kataKunci . '%');
+            });
+        }
+
+        if ($request->filled('angkatan')) {
+            $kueri->where('angkatan', $request->integer('angkatan'));
+        }
+
+        if ($request->filled('program_studi_id')) {
+            $kueri->where('program_studi_id', $request->integer('program_studi_id'));
+        }
+
+        $urutan = $request->query('urut', 'nama');
+        $arah   = $request->query('arah', 'asc');
+        $kolomDiizinkan = ['nama', 'nim', 'angkatan', 'ipk'];
+
+        if (in_array($urutan, $kolomDiizinkan, true)) {
+            $kueri->orderBy($urutan, $arah === 'desc' ? 'desc' : 'asc');
+        }
+
+        $perHalaman = max(1, min($request->integer('per_halaman', 10), 100));
+        $daftar = $kueri->paginate($perHalaman);
+
+        return MahasiswaResource::collection($daftar);
     }
 
-    public function show($id)
+    public function store(StoreMahasiswaRequest $request)
     {
-        $mahasiswa = Mahasiswa::with(['programStudi', 'matakuliah'])
-            ->findOrFail($id);
+        $mahasiswa = Mahasiswa::create($request->validated());
 
-        return view('mahasiswa.show', compact('mahasiswa'));
+        return (new MahasiswaResource($mahasiswa->load('programStudi')))
+            ->response()
+            ->setStatusCode(201);
     }
 
-    public function store(Request $request)
+    public function show(Mahasiswa $mahasiswa)
     {
-        $data = $request->validate([
-            'program_studi_id' => ['required', 'exists:program_studis,id'],
-            'nim'              => ['required', 'string', 'max:20', 'unique:mahasiswa,nim'],
-            'nama'             => ['required', 'string', 'max:100'],
-            'email'            => ['required', 'email', 'unique:mahasiswa,email'],
-            'angkatan'         => ['required', 'integer', 'min:2000'],
+        $mahasiswa->load('programStudi');
+        return new MahasiswaResource($mahasiswa);
+    }
+
+    public function update(UpdateMahasiswaRequest $request, Mahasiswa $mahasiswa)
+    {
+        $mahasiswa->update($request->validated());
+        $mahasiswa->load('programStudi');
+
+        return new MahasiswaResource($mahasiswa);
+    }
+
+    public function destroy(Mahasiswa $mahasiswa)
+    {
+        $mahasiswa->delete();
+
+        return response()->json([
+            'sukses' => true,
+            'pesan'  => 'Data mahasiswa berhasil dihapus',
         ]);
+    }
 
-        Mahasiswa::create($data);
+    public function byProgramStudi(Request $request, $id)
+    {
+        \App\Models\ProgramStudi::findOrFail($id);
 
-        return redirect()->route('mahasiswa.data')
-            ->with('sukses', 'Data mahasiswa berhasil disimpan');
+        $perHalaman = max(1, min($request->integer('per_halaman', 10), 100));
+
+        $daftar = Mahasiswa::with('programStudi')
+            ->where('program_studi_id', $id)
+            ->orderBy('nama')
+            ->paginate($perHalaman);
+
+        return MahasiswaResource::collection($daftar);
     }
 }
