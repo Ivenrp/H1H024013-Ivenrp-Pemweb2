@@ -1,0 +1,7 @@
+.env.local
+*.exe
+*.log
+/vendor/
+
+.env
+bin/
